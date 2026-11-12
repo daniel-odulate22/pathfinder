@@ -10,11 +10,7 @@ ATTENTION_ORDER = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
 
 
 def build_scene_description(detections, max_objects=3):
-    """Turn current detections into a short, plain-language sentence.
-
-    Each detection is a dict containing class_name, position, attention,
-    and confidence. Low-confidence detections are excluded.
-    """
+    """Turn current detections into a short, plain-language sentence."""
     candidates = [
         item for item in detections
         if item.get("confidence", 0) >= 0.45
@@ -32,20 +28,20 @@ def build_scene_description(detections, max_objects=3):
     for item in candidates:
         class_name = item["class_name"]
         position = item["position"].lower()
+        location = "in the centre" if position == "centre" else f"on the {position}"
         identity = (class_name, position)
 
         if identity in seen:
             continue
 
         seen.add(identity)
-        descriptions.append(f"{class_name} on the {position}")
+        descriptions.append(f"{class_name} {location}")
 
         if len(descriptions) >= max_objects:
             break
 
     if not descriptions:
         return ""
-
     if len(descriptions) == 1:
         return f"I can see {descriptions[0]}."
 
@@ -78,7 +74,6 @@ class VoiceNarrator:
                 message = self._queue.get()
                 if message is None:
                     break
-
                 engine.say(message)
                 engine.runAndWait()
 
@@ -90,7 +85,6 @@ class VoiceNarrator:
         """Queue the latest narration, dropping an older pending message."""
         if not message:
             return
-
         try:
             self._queue.put_nowait(message)
         except queue.Full:
@@ -116,5 +110,4 @@ class VoiceNarrator:
                 self._queue.put_nowait(None)
             except queue.Full:
                 pass
-
         self._thread.join(timeout=2)
