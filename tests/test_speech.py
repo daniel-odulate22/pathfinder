@@ -1,0 +1,83 @@
+import unittest
+
+from speech import build_scene_description
+
+
+class SpeechDescriptionTests(unittest.TestCase):
+    def test_describes_single_detection(self):
+        result = build_scene_description([
+            {
+                "class_name": "person",
+                "position": "CENTRE",
+                "attention": "HIGH",
+                "confidence": 0.91,
+            }
+        ])
+        self.assertEqual(result, "I can see person on the centre.")
+
+    def test_prioritises_high_attention(self):
+        result = build_scene_description([
+            {
+                "class_name": "chair",
+                "position": "LEFT",
+                "attention": "LOW",
+                "confidence": 0.99,
+            },
+            {
+                "class_name": "person",
+                "position": "CENTRE",
+                "attention": "HIGH",
+                "confidence": 0.80,
+            },
+        ])
+        self.assertTrue(result.startswith("I can see person on the centre"))
+
+    def test_ignores_low_confidence_detections(self):
+        result = build_scene_description([
+            {
+                "class_name": "bottle",
+                "position": "RIGHT",
+                "attention": "MEDIUM",
+                "confidence": 0.20,
+            }
+        ])
+        self.assertEqual(result, "")
+
+    def test_deduplicates_same_class_and_position(self):
+        result = build_scene_description([
+            {
+                "class_name": "person",
+                "position": "CENTRE",
+                "attention": "HIGH",
+                "confidence": 0.90,
+            },
+            {
+                "class_name": "person",
+                "position": "CENTRE",
+                "attention": "HIGH",
+                "confidence": 0.88,
+            },
+        ])
+        self.assertEqual(result, "I can see person on the centre.")
+
+    def test_limits_number_of_objects(self):
+        detections = [
+            {
+                "class_name": name,
+                "position": position,
+                "attention": "HIGH",
+                "confidence": 0.9,
+            }
+            for name, position in [
+                ("person", "LEFT"),
+                ("chair", "CENTRE"),
+                ("bottle", "RIGHT"),
+                ("book", "LEFT"),
+            ]
+        ]
+        result = build_scene_description(detections, max_objects=2)
+        self.assertNotIn("book", result)
+
+
+if __name__ == "__main__":
+    unittest.main()
