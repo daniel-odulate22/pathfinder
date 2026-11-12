@@ -2,25 +2,26 @@
 
 A camera-powered, voice-interactive environmental awareness assistant designed to help people with visual impairments better understand their immediate surroundings.
 
-Pathfinder's first prototype focuses on live object detection. Later milestones will explore spatial context, obstacle prioritisation, text recognition, and concise voice output.
+The current prototype detects common objects, estimates their position within the camera frame, and can speak concise scene descriptions.
 
 > **Safety note:** Pathfinder is an experimental awareness aid, not a navigation or collision-avoidance system. It does not replace a white cane, guide dog, orientation and mobility training, or other established mobility tools. Detection can be incomplete or incorrect.
 
-## Current milestone
+## Current capabilities
 
-- [x] Initial Python project setup
-- [x] Live webcam object-detection entry point
-- [ ] Verify local installation and webcam inference
-- [ ] Add left / centre / right spatial descriptions
-- [ ] Prioritise potentially relevant obstacles
-- [ ] Add speech output and basic voice commands
+- [x] Live webcam object detection with YOLO
+- [x] LEFT / CENTRE / RIGHT image-space labels
+- [x] Visual prominence and attention heuristics
+- [x] Initial offline text-to-speech narration
+- [ ] Local verification of the new narration layer
+- [ ] Speech recognition and voice questions
 - [ ] Evaluate OCR for signs and nearby text
 
 ## Tech stack
 
-- **Python** for the computer-vision prototype
+- **Python** for the prototype
 - **Ultralytics YOLO** for object detection
 - **OpenCV** for webcam capture and display
+- **pyttsx3** for offline text-to-speech
 
 ## Getting started
 
@@ -54,13 +55,27 @@ pip install -r requirements.txt
 python main.py
 ```
 
-The first run downloads the default `yolo26n.pt` model weights. Press `q` while the video window is focused to stop the program.
+Pathfinder opens the webcam and speaks concise descriptions when the detected scene changes. The first run downloads the default `yolo26n.pt` model weights.
 
-To select another camera or model:
+Press `q` in the video window to stop.
+
+To run without audio:
+
+```bash
+python main.py --mute
+```
+
+To select another camera or adjust the minimum interval between spoken updates:
 
 ```bash
 python main.py --camera 1
-python main.py --model yolo26n.pt
+python main.py --announce-interval 8
+```
+
+## Run tests
+
+```bash
+python -m unittest discover -s tests -v
 ```
 
 ## Project structure
@@ -68,9 +83,13 @@ python main.py --model yolo26n.pt
 ```text
 pathfinder/
 ├── main.py
+├── spatial.py
+├── speech.py
 ├── requirements.txt
 ├── DEVLOG.md
-└── README.md
+└── tests/
+    ├── test_spatial.py
+    └── test_speech.py
 ```
 
 ## Development log
