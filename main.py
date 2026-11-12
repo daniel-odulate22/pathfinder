@@ -1,8 +1,8 @@
-"""Pathfinder: live camera object detection with basic spatial labels.
+"""Pathfinder: live camera object detection with spatial context.
 
-This prototype detects common objects and estimates their horizontal
-position within the camera frame. It does not provide safe navigation,
-real-world distance measurement, or collision-avoidance guidance.
+This prototype detects objects and describes their image-space position
+and visual prominence. It does not provide safe navigation, physical
+distance measurement, or collision-avoidance guidance.
 """
 
 import argparse
@@ -11,7 +11,7 @@ import sys
 import cv2
 from ultralytics import YOLO
 
-from spatial import get_horizontal_position
+from spatial import get_detection_context
 
 
 def parse_args():
@@ -32,8 +32,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def annotate_spatial_positions(frame, result):
-    """Overlay LEFT / CENTRE / RIGHT labels for detected objects."""
+def annotate_spatial_context(frame, result):
+    """Overlay image-space position and visual-attention labels."""
     frame_height, frame_width = frame.shape[:2]
 
     if result.boxes is None:
@@ -44,26 +44,32 @@ def annotate_spatial_positions(frame, result):
     class_ids = boxes.cls.cpu().tolist()
     confidences = boxes.conf.cpu().tolist()
 
-    for (x1, y1, x2, y2), class_id, confidence in zip(
+    for box, class_id, confidence in zip(
         coordinates, class_ids, confidences
     ):
-        position = get_horizontal_position(x1, x2, frame_width)
+        context = get_detection_context(box, frame_width, frame_height)
         class_name = result.names[int(class_id)]
-        label = f"{class_name} | {position} | {confidence:.2f}"
+        area_percent = context["area_ratio"] * 100
 
+        label = (
+            f"{class_name} | {context['position']} | "
+            f"{context['attention']} ATTENTION | {area_percent:.0f}% frame"
+        )
+
+        x1, y1, _, _ = box
         text_y = max(25, int(y1) - 10)
+
         cv2.putText(
             frame,
             label,
             (int(x1), text_y),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
+            0.48,
             (0, 255, 255),
             2,
             cv2.LINE_AA,
         )
 
-    # Visual guides show the three image-space regions.
     third = frame_width // 3
     two_thirds = (frame_width * 2) // 3
     guide_color = (180, 180, 180)
@@ -105,7 +111,7 @@ def main():
 
             results = model.predict(frame, verbose=False)
             annotated_frame = results[0].plot()
-            annotated_frame = annotate_spatial_positions(
+            annotated_frame = annotate_spatial_context(
                 annotated_frame, results[0]
             )
 
