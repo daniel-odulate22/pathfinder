@@ -13,7 +13,7 @@ class SpeechDescriptionTests(unittest.TestCase):
                 "confidence": 0.91,
             }
         ])
-        self.assertEqual(result, "I can see person on the centre.")
+        self.assertEqual(result, "I can see person in the centre.")
 
     def test_prioritises_high_attention(self):
         result = build_scene_description([
@@ -30,7 +30,7 @@ class SpeechDescriptionTests(unittest.TestCase):
                 "confidence": 0.80,
             },
         ])
-        self.assertTrue(result.startswith("I can see person on the centre"))
+        self.assertTrue(result.startswith("I can see person in the centre"))
 
     def test_ignores_low_confidence_detections(self):
         result = build_scene_description([
@@ -58,7 +58,7 @@ class SpeechDescriptionTests(unittest.TestCase):
                 "confidence": 0.88,
             },
         ])
-        self.assertEqual(result, "I can see person on the centre.")
+        self.assertEqual(result, "I can see person in the centre.")
 
     def test_limits_number_of_objects(self):
         detections = [
