@@ -5,49 +5,46 @@ This file records implemented work and verified results. Planned work is kept se
 ## 12 November 2026
 
 ### Milestone 1: Live object detection
-- Added the initial Python dependency list in `requirements.txt`.
-- Added a Python entry point in `main.py` for live webcam object detection using Ultralytics YOLO and OpenCV.
-- The developer ran the application locally. The webcam opened, YOLO26n loaded, and live detections with bounding boxes and confidence scores were visible.
+- Added live webcam object detection using Ultralytics YOLO and OpenCV.
+- Developer verified that YOLO26n loaded, webcam opened, and bounding boxes and confidence scores rendered.
 
 ### Milestone 2: Basic horizontal spatial awareness
-- Added `spatial.py` with a helper that classifies an object's bounding-box centre as LEFT, CENTRE, or RIGHT relative to the camera frame.
-- Updated `main.py` to overlay the spatial label and confidence alongside each detected class.
-- Added vertical guide lines to show the three image-space regions.
-- The developer confirmed that the left / centre / right labels work locally.
+- Added LEFT / CENTRE / RIGHT image-space classification based on bounding-box centres.
+- Developer confirmed these labels worked locally.
 
 ### Milestone 3: Visual prominence and attention heuristic
-- Added bounding-box area ratio as a measure of how much of the image frame a detection occupies.
-- Added a simple HIGH / MEDIUM / LOW visual-attention heuristic based on horizontal position and frame-area ratio.
-- Updated the live overlay to display the attention label and percentage of frame occupied.
-- Added standard-library unit tests in `tests/test_spatial.py`.
+- Added bounding-box area ratio and HIGH / MEDIUM / LOW visual-attention heuristic.
+- Added standard-library unit tests. Local verification remains pending.
 
 ### Milestone 4: Initial voice narration
-- Added `speech.py` to turn detections into short plain-language scene descriptions.
-- Added offline text-to-speech using `pyttsx3`.
-- Runs speech on a background thread so narration does not block webcam capture.
-- Limits narration to changed scene descriptions and applies a configurable minimum interval to reduce repetitive announcements.
-- Added a `--mute` option and `--announce-interval` setting.
-- Added unit tests for scene-description selection, confidence filtering, deduplication, and output limits.
+- Added concise scene-description generation and offline text-to-speech using `pyttsx3`.
+- Speech runs on a background thread so it does not block camera capture.
+- Added confidence filtering, deduplication, `--mute`, and `--announce-interval`.
+- Developer confirmed audio narration works locally.
+
+### Milestone 5: Controlled repeat narration
+- Changed narration scheduling so a changed scene can be announced after the minimum changed-scene interval.
+- An unchanged scene is repeated after a separate configurable interval, defaulting to 12 seconds.
+- Empty scenes are not announced.
+- Added unit tests for changed-scene announcements, repeat timing, and empty-scene suppression.
 
 ### Technical decisions and limitations
-- Use Python, Ultralytics YOLO, and OpenCV for the computer-vision prototype.
-- Use the lightweight `yolo26n.pt` model by default.
-- Use local/offline `pyttsx3` for the first narration prototype, avoiding a cloud speech service.
+- Use Python, Ultralytics YOLO, OpenCV, and local/offline `pyttsx3`.
 - Horizontal position describes image-space location only.
-- Bounding-box area ratio describes visual prominence only. It is not a physical distance estimate.
+- Bounding-box area ratio describes visual prominence, not physical distance.
 - HIGH / MEDIUM / LOW is an attention heuristic, not a danger rating or proof that an object is an obstacle.
-- Narration is one-way scene description. Speech recognition and conversational voice commands are not implemented yet.
-- The system does not provide safe navigation, collision probability, or collision-avoidance guidance.
+- Narration is one-way scene description. Speech recognition and conversational voice commands are not implemented.
+- Pathfinder does not provide safe navigation or collision avoidance.
 
 ### Verification status
-- **Milestone 1:** Verified locally by the developer. The webcam opened and live object detections rendered successfully.
-- **Milestone 2:** Verified locally by the developer. Horizontal labels worked as expected.
-- **Milestone 3:** Implemented in the repository; local tests and overlay verification remain pending.
-- **Milestone 4:** Implemented in the repository; local installation, tests, and audio playback remain pending.
+- **Milestone 1:** Verified locally by the developer.
+- **Milestone 2:** Verified locally by the developer.
+- **Milestone 3:** Implemented; local tests remain pending.
+- **Milestone 4:** Verified locally by the developer.
+- **Milestone 5:** Implemented; repeat cadence requires local verification.
 
 ### Next steps
-1. Pull the latest changes and run `python -m pip install -r requirements.txt`.
-2. Run `python -m unittest discover -s tests -v`.
-3. Run `python main.py` and verify that spoken descriptions are audible and not repetitive.
-4. Test `python main.py --mute` to confirm the visual prototype still works without narration.
-5. Only after narration is stable, explore speech recognition for user questions and commands.
+1. Pull changes, run `python -m unittest discover -s tests -v`, and test the repeat cadence.
+2. Add user-triggered speech input and a small set of grounded camera-context questions.
+3. Evaluate microphone support and speech-recognition reliability on the target Windows machine.
+4. Consider OCR only after the voice interaction loop is stable.
