@@ -50,6 +50,26 @@ def build_scene_description(detections, max_objects=3):
     )
 
 
+def should_announce(
+    description,
+    previous_description,
+    now,
+    last_announcement_time,
+    min_interval=5.0,
+    repeat_interval=12.0,
+):
+    """Announce changed scenes promptly and repeat stable scenes periodically."""
+    if not description:
+        return False
+
+    elapsed = now - last_announcement_time
+
+    if description != previous_description:
+        return elapsed >= min_interval
+
+    return elapsed >= repeat_interval
+
+
 class VoiceNarrator:
     """Speak asynchronously so text-to-speech does not block camera capture."""
 
