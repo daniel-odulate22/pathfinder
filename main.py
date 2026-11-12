@@ -1,17 +1,18 @@
-"""Pathfinder: live camera object detection with spatial context.
+"""Pathfinder: live object detection, spatial context, and voice narration.
 
-This prototype detects objects and describes their image-space position
-and visual prominence. It does not provide safe navigation, physical
-distance measurement, or collision-avoidance guidance.
+This prototype describes detections in the camera image. It does not provide
+safe navigation, physical distance measurement, or collision avoidance.
 """
 
 import argparse
 import sys
+import time
 
 import cv2
 from ultralytics import YOLO
 
 from spatial import get_detection_context
+from speech import VoiceNarrator, build_scene_description
 
 
 def parse_args():
@@ -29,6 +30,17 @@ def parse_args():
         default=0,
         help="Webcam device index (default: 0)",
     )
+    parser.add_argument(
+        "--mute",
+        action="store_true",
+        help="Disable voice narration while keeping visual detections.",
+    )
+    parser.add_argument(
+        "--announce-interval",
+        type=float,
+        default=5.0,
+        help="Minimum seconds between spoken scene updates (default: 5).",
+    )
     return parser.parse_args()
 
 
@@ -39,10 +51,9 @@ def annotate_spatial_context(frame, result):
     if result.boxes is None:
         return frame
 
-    boxes = result.boxes
-    coordinates = boxes.xyxy.cpu().tolist()
-    class_ids = boxes.cls.cpu().tolist()
-    confidences = boxes.conf.cpu().tolist()
+    coordinates = result.boxes.xyxy.cpu().tolist()
+    class_ids = result.boxes.cls.cpu().tolist()
+    confidences = result.boxes.conf.cpu().tolist()
 
     for box, class_id, confidence in zip(
         coordinates, class_ids, confidences
@@ -80,8 +91,37 @@ def annotate_spatial_context(frame, result):
     return frame
 
 
+def collect_detections(result, frame_width, frame_height):
+    """Convert YOLO output into plain data for the narration layer."""
+    detections = []
+
+    if result.boxes is None:
+        return detections
+
+    coordinates = result.boxes.xyxy.cpu().tolist()
+    class_ids = result.boxes.cls.cpu().tolist()
+    confidences = result.boxes.conf.cpu().tolist()
+
+    for box, class_id, confidence in zip(
+        coordinates, class_ids, confidences
+    ):
+        context = get_detection_context(box, frame_width, frame_height)
+        detections.append({
+            "class_name": result.names[int(class_id)],
+            "position": context["position"],
+            "attention": context["attention"],
+            "confidence": float(confidence),
+        })
+
+    return detections
+
+
 def main():
     args = parse_args()
+
+    if args.announce_interval < 0:
+        print("--announce-interval must not be negative.", file=sys.stderr)
+        return 1
 
     print(f"Loading model: {args.model}")
     try:
@@ -100,6 +140,17 @@ def main():
         )
         return 1
 
+    narrator = None
+    if not args.mute:
+        try:
+            narrator = VoiceNarrator()
+            print("Voice narration enabled. Use --mute to disable it.")
+        except Exception as exc:
+            print(f"Could not start voice narration: {exc}", file=sys.stderr)
+
+    last_announcement = ""
+    last_announcement_time = 0.0
+
     print("Pathfinder is running. Press 'q' in the video window to quit.")
 
     try:
@@ -110,12 +161,31 @@ def main():
                 break
 
             results = model.predict(frame, verbose=False)
-            annotated_frame = results[0].plot()
+            result = results[0]
+            frame_height, frame_width = frame.shape[:2]
+
+            detections = collect_detections(
+                result, frame_width, frame_height
+            )
+            description = build_scene_description(detections)
+
+            now = time.monotonic()
+            if (
+                narrator
+                and description
+                and description != last_announcement
+                and now - last_announcement_time >= args.announce_interval
+            ):
+                narrator.speak(description)
+                last_announcement = description
+                last_announcement_time = now
+
+            annotated_frame = result.plot()
             annotated_frame = annotate_spatial_context(
-                annotated_frame, results[0]
+                annotated_frame, result
             )
 
-            cv2.imshow("Pathfinder | Spatial Awareness", annotated_frame)
+            cv2.imshow("Pathfinder | Voice Awareness", annotated_frame)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
@@ -124,6 +194,8 @@ def main():
     finally:
         camera.release()
         cv2.destroyAllWindows()
+        if narrator:
+            narrator.close()
 
     return 0
 
