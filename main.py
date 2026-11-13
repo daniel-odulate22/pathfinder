@@ -80,6 +80,7 @@ def collect_detections(result, frame_width, frame_height):
             "position": context["position"],
             "attention": context["attention"],
             "confidence": float(confidence),
+            "box": box,
         })
     return detections
 
