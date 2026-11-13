@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: .
+    volumes:
+      - pathfinder-data:/data  # SQLite database and downloaded model weights
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:8080:80"  # localhost only: the API has no authentication
+    depends_on:
+      - backend
+
+  # Opt-in: `docker compose --profile phone up` prints a public HTTPS URL for
+  # phone cameras. Anyone with the URL can use the app, and frames pass through Cloudflare.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://frontend:80
+    profiles: [phone]
+    depends_on:
+      - frontend
+
+volumes:
+  pathfinder-data:
