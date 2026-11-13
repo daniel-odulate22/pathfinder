@@ -1,0 +1,27 @@
+:root {
+  color-scheme: dark;
+  font: 1.125rem/1.5 system-ui, sans-serif;
+  background: #000;
+  color: #fff;
+}
+body { margin: 0; }
+main { max-width: 48rem; margin: 0 auto; padding: 1rem; }
+h1 { margin: 0 0 0.5rem; }
+.note { color: #ccc; font-size: 0.9rem; }
+.view { position: relative; background: #111; aspect-ratio: 4 / 3; margin: 1rem 0; }
+.view video, .view canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.controls, form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+button, input {
+  font: inherit; min-height: 3rem; padding: 0.5rem 1.25rem;
+  border: 2px solid #fff; border-radius: 0.5rem; background: #000; color: #fff;
+}
+button { font-weight: 700; cursor: pointer; }
+button.primary { background: #ffd400; border-color: #ffd400; color: #000; }
+button.voice { width: 100%; min-height: 7rem; font-size: 1.75rem; }
+input { flex: 1; min-width: 12rem; }
+:focus-visible { outline: 4px solid #ffd400; outline-offset: 2px; }
+.spoken { font-size: 1.5rem; font-weight: 700; min-height: 2.25rem; }
+.error { color: #ff8a80; }
+ol { padding: 0; list-style: none; }
+li { padding: 0.5rem 0; border-top: 1px solid #444; }
+time { color: #ccc; margin-right: 0.75rem; }

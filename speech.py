@@ -1,6 +1,7 @@
 """Voice narration helpers for Pathfinder."""
 
 import queue
+import re
 import threading
 
 import pyttsx3
@@ -68,6 +69,58 @@ def should_announce(
         return elapsed >= min_interval
 
     return elapsed >= repeat_interval
+
+
+QUESTION_POSITIONS = (
+    ("left", "LEFT"), ("right", "RIGHT"), ("front", "CENTRE"),
+    ("ahead", "CENTRE"), ("centre", "CENTRE"), ("center", "CENTRE"),
+)
+
+
+# Everyday words for class names the detection model uses.
+OBJECT_ALIASES = {
+    "people": "person", "someone": "person", "anyone": "person",
+    "table": "dining table", "phone": "cell phone", "sofa": "couch",
+    "plant": "potted plant", "television": "tv", "bag": "backpack",
+}
+
+
+def find_target_class(question, known_classes):
+    """Return the detectable class a question names, or None."""
+    known = set(known_classes)
+    names = {name: name for name in known}
+    names.update({a: n for a, n in OBJECT_ALIASES.items() if n in known})
+    # Longest first so "hot dog" is not mistaken for "dog".
+    for word in sorted(names, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(word)}(s|es)?\b", question.lower()):
+            return names[word]
+    return None
+
+
+def answer_question(question, detections, known_classes=()):
+    """Answer a camera-context question using only the current detections.
+
+    known_classes is every class the model can detect, so a search for an
+    absent object gets "I cannot see a chair" instead of an unrelated scene.
+    """
+    lowered = question.lower()
+    target = find_target_class(question, known_classes)
+    subject = "anything there"
+    if target:
+        detections = [d for d in detections if d["class_name"] == target]
+        subject = f"a {target}"
+    elif known_classes and re.search(r"\b(where|find|locate)\b", lowered):
+        return ("I cannot look for that. I can find common objects such as "
+                "people, chairs, tables, bottles, cups, laptops, and bags.")
+    for word, position in QUESTION_POSITIONS:
+        if word in lowered:
+            detections = [d for d in detections if d["position"] == position]
+            if target:
+                subject += " there"
+            break
+    return build_scene_description(detections) or (
+        f"I cannot see {subject} right now."
+    )
 
 
 class VoiceNarrator:
