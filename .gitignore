@@ -27,3 +27,8 @@ runs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Web app
+node_modules/
+frontend/dist/
+*.db
