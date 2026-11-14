@@ -32,3 +32,8 @@ Thumbs.db
 node_modules/
 frontend/dist/
 *.db
+
+# Local camera captures and private evaluation material
+diagnostic_frames/
+evaluation/private/
+evaluation/local/
