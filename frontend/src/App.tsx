@@ -1,214 +1,132 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
-
-type Detection = {
-  class_name: string;
-  position: string;
-  attention: string;
-  confidence: number;
-  box: [number, number, number, number];
-};
-type Entry = { id: number; created_at: string; text: string };
-
-// Not in TypeScript's DOM lib; Chrome and Safari only, so the mic button hides elsewhere.
-const Recognition =
-  (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { askPathfinder, detectFrame, getHistory } from "./services/pathfinderApi";
+import { useSpeech } from "./hooks/useSpeech";
+import type { Announcement, Detection } from "./types";
 
 export default function App() {
-  const video = useRef<HTMLVideoElement>(null);
-  const overlay = useRef<HTMLCanvasElement>(null);
-  const muted = useRef(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [running, setRunning] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [spoken, setSpoken] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [history, setHistory] = useState<Entry[]>([]);
   const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("Start the camera to get a live description of the space around you.");
+  const [detections, setDetections] = useState<Detection[]>([]);
+  const [history, setHistory] = useState<Announcement[]>([]);
+  const [cameraRatio, setCameraRatio] = useState("4 / 3");
+  const speech = useSpeech();
 
-  const loadHistory = () =>
-    fetch("/api/history")
-      .then((res) => res.json())
-      .then(setHistory)
-      .catch(() => {});
+  const refreshHistory = useCallback(() => { getHistory().then(setHistory).catch(() => undefined); }, []);
+  const announce = useCallback((text: string) => { setAnswer(text); speech.speak(text); refreshHistory(); }, [speech.speak, refreshHistory]);
 
-  function say(text: string) {
-    setSpoken(text);
-    loadHistory();
-    if (muted.current) return;
-    speechSynthesis.cancel(); // latest message wins, like the desktop narrator
-    speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-  }
-
-  function draw(detections: Detection[]) {
-    const canvas = overlay.current!;
-    const { videoWidth: w, videoHeight: h } = video.current!;
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d")!;
-    ctx.lineWidth = 3;
-    ctx.font = "bold 18px system-ui";
-    ctx.strokeStyle = "rgba(255,255,255,0.4)";
-    for (const x of [w / 3, (w * 2) / 3]) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-    ctx.strokeStyle = ctx.fillStyle = "#ffd400";
-    for (const d of detections) {
-      const [x1, y1, x2, y2] = d.box;
-      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-      ctx.fillText(`${d.class_name} | ${d.position} | ${d.attention}`, x1, Math.max(20, y1 - 8));
-    }
-  }
-
-  useEffect(() => {
-    loadHistory();
-  }, []);
+  useEffect(() => { refreshHistory(); }, [refreshHistory]);
 
   useEffect(() => {
     if (!running) return;
-    let stop = false;
+    let cancelled = false;
     let stream: MediaStream | undefined;
-    const grab = document.createElement("canvas");
-
-    (async () => {
+    let active = false;
+    const capture = document.createElement("canvas");
+    const wait = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
+    async function runCamera() {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-        });
-        if (stop) return stream.getTracks().forEach((t) => t.stop());
-        const v = video.current!;
-        v.srcObject = stream;
-        await v.play();
-        while (!stop) {
-          grab.width = v.videoWidth;
-          grab.height = v.videoHeight;
-          grab.getContext("2d")!.drawImage(v, 0, 0);
-          const frame = await new Promise<Blob | null>((r) => grab.toBlob(r, "image/jpeg", 0.7));
-          const res = await fetch("/api/detect", { method: "POST", body: frame });
-          if (!res.ok) throw new Error(`Detection failed (${res.status})`);
-          const data = await res.json();
-          if (stop) break;
-          draw(data.detections);
-          if (data.announce) say(data.description);
-          await new Promise((r) => setTimeout(r, 250));
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera access is unavailable in this browser.");
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        if (cancelled) { stream.getTracks().forEach(track => track.stop()); return; }
+        const video = videoRef.current;
+        if (!video) return;
+        video.srcObject = stream;
+        await video.play();
+        setCameraRatio(video.videoWidth + " / " + video.videoHeight);
+        active = true;
+        while (!cancelled && active) {
+          if (!video.videoWidth || !video.videoHeight) { await wait(250); continue; }
+          capture.width = video.videoWidth; capture.height = video.videoHeight;
+          capture.getContext("2d")?.drawImage(video, 0, 0);
+          const frame = await new Promise<Blob | null>(resolve => capture.toBlob(resolve, "image/jpeg", 0.72));
+          if (!frame) throw new Error("Could not capture a camera frame.");
+          const data = await detectFrame(frame);
+          if (cancelled) break;
+          setDetections(data.detections);
+          drawDetections(data.detections, canvasRef.current, video.videoWidth, video.videoHeight);
+          if (data.announce && data.description) announce(data.description);
+          await wait(450);
         }
-      } catch (e) {
-        if (stop) return;
-        setError(e instanceof Error ? e.message : String(e));
-        setRunning(false);
+      } catch (cause) {
+        if (!cancelled) { setError(cause instanceof Error ? cause.message : String(cause)); setRunning(false); }
       }
-    })();
-
-    return () => {
-      stop = true;
-      stream?.getTracks().forEach((t) => t.stop());
-      speechSynthesis.cancel();
-    };
-  }, [running]);
+    }
+    void runCamera();
+    return () => { cancelled = true; active = false; stream?.getTracks().forEach(track => track.stop()); speech.stopSpeaking(); };
+  }, [running, announce, speech.stopSpeaking]);
 
   async function ask(text: string) {
-    if (!text.trim()) return;
-    setQuestion("");
-    try {
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text.trim().slice(0, 200) }),
-      });
-      if (!res.ok) throw new Error(`Question failed (${res.status})`);
-      say((await res.json()).answer);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+    const trimmed = text.trim();
+    if (!trimmed || busy) return;
+    setBusy(true); setError(""); setQuestion("");
+    try { const result = await askPathfinder(trimmed); announce(result.answer); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setBusy(false); }
   }
 
-  function listen() {
-    speechSynthesis.cancel(); // otherwise the microphone hears our own narration
-    // Short tone so a user who cannot see the screen knows listening has started.
-    const audio = new AudioContext();
-    const tone = audio.createOscillator();
-    tone.connect(audio.destination);
-    tone.start();
-    tone.stop(audio.currentTime + 0.15);
-    const recognition = new Recognition();
-    recognition.onresult = (event: any) => ask(event.results[0][0].transcript);
-    recognition.onerror = (event: any) => setError(`Could not hear a question (${event.error}).`);
-    recognition.start();
-  }
+  function submit(event: FormEvent) { event.preventDefault(); void ask(question); }
 
   return (
-    <main>
-      <h1>Pathfinder</h1>
-      <p className="note">
-        Experimental awareness aid. It is not a navigation or collision-avoidance system and
-        does not replace a white cane, guide dog, or mobility training. Detection can be wrong.
-      </p>
-
-      <div className="controls">
-        <button
-          className="primary"
-          onClick={() => {
-            setError("");
-            setRunning(!running);
-          }}
-        >
-          {running ? "Stop camera" : "Start camera"}
-        </button>
-        <button
-          aria-pressed={isMuted}
-          onClick={() => {
-            muted.current = !isMuted;
-            setIsMuted(!isMuted);
-            speechSynthesis.cancel();
-          }}
-        >
-          {isMuted ? "Unmute voice" : "Mute voice"}
-        </button>
-      </div>
-
-      {Recognition && (
-        <button className="voice primary" onClick={listen}>
-          Ask by voice
-        </button>
-      )}
-
-      <p className="spoken" aria-live="polite">{spoken}</p>
-      {error && <p className="error" role="alert">{error}</p>}
-
-      <form
-        onSubmit={(event: FormEvent) => {
-          event.preventDefault();
-          ask(question);
-        }}
-      >
-        <input
-          aria-label="Ask about the scene"
-          placeholder="Where is the chair?"
-          maxLength={200}
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-        />
-        <button type="submit">Ask</button>
-        <button type="button" onClick={() => ask("Read the text")}>
-          Read text
-        </button>
-      </form>
-
-      <div className="view">
-        <video ref={video} muted playsInline aria-label="Camera preview" />
-        <canvas ref={overlay} aria-hidden="true" />
-      </div>
-
-      <h2>Recent announcements</h2>
-      <ol>
-        {history.map((entry) => (
-          <li key={entry.id}>
-            <time>{new Date(entry.created_at.replace(" ", "T") + "Z").toLocaleTimeString()}</time>
-            {entry.text}
-          </li>
-        ))}
-      </ol>
+    <main className="app-shell">
+      <header className="topbar">
+        <a className="brand" href="#home" aria-label="Pathfinder home"><span className="brand-mark">P</span><span>pathfinder<small>SEE YOUR SURROUNDINGS</small></span></a>
+        <div className="topbar-right"><span className={"status-pill " + (running ? "is-live" : "") }><i />{running ? "LIVE SESSION" : "SESSION PAUSED"}</span><button className="quiet-button" onClick={speech.toggleMute} aria-pressed={speech.muted}>{speech.muted ? "Sound off" : "Sound on"}</button></div>
+      </header>
+      <section className="workspace" id="home">
+        <div className="main-column">
+          <div className="section-heading"><div><p className="eyebrow">YOUR POINT OF VIEW</p><h1>Understand the space around you.</h1><p className="subheading">A live picture of your surroundings, translated into words.</p></div><span className="session-index">01 <b>/</b> LIVE VIEW</span></div>
+          <section className="camera-card" aria-label="Live camera workspace">
+            <div className="camera-toolbar"><span><i className={running ? "live-dot" : "idle-dot"} />{running ? "Camera active" : "Camera ready"}</span><span>{running ? detections.length + " objects in view" : "Waiting for camera"}</span></div>
+            <div className="camera-stage" style={{ aspectRatio: cameraRatio }}>
+              <video ref={videoRef} muted playsInline aria-label="Live camera preview" />
+              <canvas ref={canvasRef} aria-hidden="true" />
+              {!running && <div className="camera-placeholder"><div className="aperture"><span /></div><strong>Your surroundings, in focus.</strong><p>Start the camera when you are ready.</p></div>}
+              {running && <div className="frame-corner corner-tl" />}{running && <div className="frame-corner corner-tr" />}{running && <div className="frame-corner corner-bl" />}{running && <div className="frame-corner corner-br" />}
+            </div>
+            <div className="camera-footer"><span>CAMERA FEED <b>·</b> ON-DEVICE PREVIEW</span><button className={running ? "stop-button" : "start-button"} onClick={() => { setError(""); setRunning(value => !value); }}>{running ? "Stop camera" : "Start camera"}<span>{running ? "Ⅱ" : "↗"}</span></button></div>
+          </section>
+          <div className="safety-line"><span>ⓘ</span><p>Pathfinder is an experimental awareness aid, not a navigation or collision-avoidance system. It can miss or misidentify objects and does not replace a white cane, guide dog, or mobility training.</p></div>
+        </div>
+        <aside className="insight-column">
+          <section className="observation-panel"><div className="panel-heading"><div><p className="eyebrow">02 / SCENE NOTES</p><h2>What I notice</h2></div><span className="panel-symbol">◉</span></div>
+            <div className="answer-block" aria-live="polite"><span className="tiny-label">LATEST OBSERVATION</span><p>{answer}</p></div>
+            <div className="detected-heading"><span className="tiny-label">IN THE FRAME</span><span>{detections.length.toString().padStart(2, "0")}</span></div>
+            {detections.length ? <ul className="detection-list">{detections.slice(0, 8).map((item, index) => <li key={item.class_name + item.position + index}><span className="detection-name"><i />{item.class_name.replaceAll("_", " ")}</span><span className="detection-position">{item.position}</span></li>)}</ul> : <p className="empty-state">{running ? "Nothing detected just yet. Keep the camera steady." : "Detected objects will appear here."}</p>}
+          </section>
+          <section className="ask-panel"><p className="eyebrow">03 / ASK ABOUT THIS VIEW</p><h2>Curious about something?</h2><p className="ask-description">Ask a question about what the camera can currently see.</p>
+            <form onSubmit={submit} className="question-form"><label className="sr-only" htmlFor="question">Ask Pathfinder a question</label><input id="question" value={question} onChange={event => setQuestion(event.target.value)} maxLength={200} placeholder="Where is the chair?" /><button type="submit" disabled={busy || !question.trim()} aria-label="Send question">↗</button></form>
+            <div className="ask-actions"><button className="voice-button" disabled={!speech.supported} onClick={() => speech.listen(text => void ask(text), setError)}><span>◖</span> Ask by voice</button><button className="read-button" onClick={() => void ask("Read the text")}>Read text <span>↗</span></button></div>
+            {!speech.supported && <p className="support-note">Voice input is unavailable in this browser. You can still type a question.</p>}
+          </section>
+          <section className="history-panel"><div className="panel-heading"><div><p className="eyebrow">04 / RECENT ACTIVITY</p><h2>Earlier observations</h2></div><button className="text-button" onClick={refreshHistory}>Refresh ↻</button></div>
+            {history.length ? <ol className="history-list">{history.slice(0, 4).map(entry => <li key={entry.id}><time>{new Date(entry.created_at.replace(" ", "T") + "Z").toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time><span>{entry.text}</span></li>)}</ol> : <p className="empty-state">Your recent observations will collect here.</p>}
+          </section>
+        </aside>
+      </section>
+      {error && <div className="error-toast" role="alert"><span>{error}</span><button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
+      <footer className="app-footer"><span>PATHFINDER <b>·</b> BUILT FOR A MORE UNDERSTANDABLE WORLD</span><span>EXPERIMENTAL BUILD 0.2</span></footer>
     </main>
   );
+}
+
+function drawDetections(items: Detection[], canvas: HTMLCanvasElement | null, width: number, height: number) {
+  if (!canvas) return;
+  canvas.width = width; canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  context.lineWidth = Math.max(2, width / 500);
+  context.font = "600 " + Math.max(13, width / 65) + "px system-ui";
+  context.strokeStyle = "#d7ff62"; context.fillStyle = "#d7ff62";
+  for (const item of items) {
+    const [x1, y1, x2, y2] = item.box;
+    context.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    const label = item.class_name + " · " + item.position;
+    const y = Math.max(20, y1 - 9);
+    context.fillText(label, x1, y);
+  }
 }
