@@ -84,7 +84,7 @@ python main.py --camera 1
 python main.py --announce-interval 8
 ```
 
-## Run the web app with Docker Compose
+## Optional: run the web app with Docker Compose
 
 ```bash
 docker compose up --build

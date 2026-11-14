@@ -89,3 +89,32 @@ This file records implemented work and verified results. Planned work is kept se
 2. Run `docker compose up --build` and test the web app with a real camera, speakers, and microphone.
 3. Evaluate browser speech-recognition reliability on the target Windows machine.
 4. Try **Read text** on real signs through the camera, including at an angle and from a distance.
+
+## 14 November 2026
+
+### Milestone 11: Integrated local development workflow verified
+- The merged React + TypeScript frontend and FastAPI backend were pulled into the developer's local repository.
+- The developer started the backend and frontend in separate terminals and confirmed that both ran successfully.
+- The developer reported that the frontend loaded, the backend operated, and the automated test suite passed.
+- The two-terminal local workflow is the recommended development path for now. Docker remains optional.
+- The visual design has not yet been redesigned. A full interface redesign is planned; the current design is functional but does not yet meet the intended product art direction.
+
+### Milestone 12: Product architecture direction
+- Agreed to treat Pathfinder as one product with a device-independent intelligence layer and multiple possible interfaces.
+- The current browser application is the first interface, using a computer or phone camera, microphone, display, and audio output.
+- Smart glasses or another wearable are a future interface direction, not an implemented capability.
+- Future architecture should keep scene understanding and interaction logic separate from device-specific camera, microphone, and audio adapters.
+- No wearable hardware, embedded deployment, or wearable-specific model optimisation has been implemented yet.
+
+### Evaluation and privacy notes
+- Local diagnostic captures are useful for investigating false detections and missed detections.
+- Raw camera captures should remain local by default. They may contain identifiable people or private surroundings and must not be uploaded to the public repository without consent and privacy review.
+- A curated evaluation dataset is planned. It should include ground-truth object labels, model predictions, capture conditions, and outcomes so model changes can be compared objectively.
+- The existing diagnostic captures have not yet been converted into a reviewed or annotated evaluation dataset.
+
+### Next steps
+1. Keep local diagnostic captures excluded from Git and define a privacy-reviewed evaluation dataset workflow.
+2. Redesign the browser interface around a persistent camera workspace, accessible controls, clear live status, and compact scene information.
+3. Review the frontend/backend boundary so device-specific input and output can evolve independently from scene understanding.
+4. Continue vision evaluation, including missed detections, false classifications, duplicate boxes, blur, and performance on the target machine.
+5. Revisit wearable hardware only after the shared software interfaces and interaction requirements are clearer.
