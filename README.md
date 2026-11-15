@@ -1,154 +1,200 @@
 # Pathfinder
 
-A camera-powered, voice-interactive environmental awareness assistant designed to help people with visual impairments better understand their immediate surroundings.
+Pathfinder is a camera-powered accessibility assistant that uses computer vision and voice interaction to help people with visual impairments better understand their immediate surroundings.
 
-The current prototype detects common objects, estimates their position within the camera frame, and can speak concise scene descriptions.
+It analyses a live camera feed, identifies supported everyday objects, describes their position within the image, and lets users ask questions about what is currently visible. Users can also request text reading from signs and labels.
 
-**Focus: find it and read it, indoors.** A user in an unfamiliar room asks "Where is the chair?" or "Is anyone here?", then points the camera at a sign or label and asks what it says.
+> **Safety and scope:** Pathfinder is an experimental environmental-awareness aid. It is not a navigation, obstacle-detection, or collision-avoidance system. It does not measure reliable physical distance and does not replace a white cane, guide dog, orientation and mobility training, or other established mobility tools. Its detections and OCR results can be incomplete or incorrect.
 
-> **Safety note:** Pathfinder is an experimental awareness aid, not a navigation or collision-avoidance system. It does not replace a white cane, guide dog, orientation and mobility training, or other established mobility tools. Detection can be incomplete or incorrect.
+## What it can do
 
-## Current capabilities
+- **Live object detection:** Detects objects supported by the default YOLO model from a webcam feed.
+- **Image-space position:** Groups detections as LEFT, CENTRE, or RIGHT based on their position in the camera frame.
+- **Scene descriptions:** Produces concise spoken descriptions of detected objects, with repeat and change-aware announcement logic.
+- **Ask about the current view:** Accepts typed questions and browser speech input, including questions about an object's name or its left/right position.
+- **Read text on request:** Uses RapidOCR to read text from the latest camera frame when the user requests it.
+- **Recent activity:** Stores announcement and question history in SQLite.
+- **Camera-first web interface:** Provides a live camera workspace, detection overlay, scene notes, question controls, and responsive layout.
 
-- [x] Live webcam object detection with YOLO
-- [x] LEFT / CENTRE / RIGHT image-space labels
-- [x] Visual prominence and attention heuristics
-- [x] Initial offline text-to-speech narration
-- [x] Narration scheduling verified: an unchanged scene repeats every 12–13 seconds through the web API
-- [ ] Listen to the desktop `pyttsx3` narration on the target machine
-- [x] Web app: React + TypeScript frontend, FastAPI backend, SQLite announcement history, Docker Compose
-- [x] Typed and spoken position questions in the web app ("What is on my left?")
-- [x] Object search by name ("Where is the chair?", "Is there a bottle on my right?")
-- [x] Large **Ask by voice** button with a start tone, and an opt-in HTTPS tunnel for phone cameras
-- [x] Web app verified in headless Chrome with a simulated camera: detection, overlay, announcements, questions, text reading, mute, stop
-- [ ] Check audible speech, spoken questions, and a phone camera by hand
-- [x] On-demand text reading in the web app: **Read text** button or "What does the sign say?"
-- [x] OCR evaluated on real sign photos; Tesseract replaced with RapidOCR as a result
+The object detector can only identify classes included in its model. It cannot reliably find arbitrary objects, doors, stairs, exits, or hazards unless those are supported by the model and correctly detected.
 
-## Tech stack
+## Technology
 
-- **Python** for the prototype
-- **Ultralytics YOLO** for object detection
-- **OpenCV** for webcam capture and display
-- **pyttsx3** for offline text-to-speech (desktop prototype)
-- **React + TypeScript (Vite)** for the web frontend; the browser provides camera, speech output, and speech input
-- **FastAPI** for the detection API and **SQLite** for announcement history
-- **Docker Compose** to run the web app
+| Area | Technology |
+|---|---|
+| Object detection | Ultralytics YOLO (default model: YOLO26n) |
+| Image processing | OpenCV |
+| OCR | RapidOCR with ONNX Runtime |
+| Backend API | Python, FastAPI, Uvicorn |
+| Frontend | React, TypeScript, Vite |
+| Camera and speech in web app | Browser MediaDevices and Web Speech APIs |
+| Desktop prototype speech | pyttsx3 |
+| History | SQLite |
+| Container workflow | Docker Compose |
 
-## Getting started
+## How it works
 
-### 1. Requirements
+1. The browser requests camera permission and captures frames.
+2. Frames are sent to the FastAPI backend for object detection.
+3. The backend calculates image-space positions and prepares scene descriptions.
+4. The frontend draws detection overlays and uses browser speech synthesis for spoken output.
+5. Typed or recognised spoken questions are sent to the backend and answered from the current detection context.
+6. When text reading is requested, RapidOCR processes the latest frame and returns readable text.
+
+The current backend keeps shared scene state and is intended for one active camera session at a time. It is a local prototype, not a multi-user production service.
+
+## Run locally
+
+### Requirements
 
 - Python 3.10 or newer
-- A working webcam
+- Node.js and npm
+- A webcam
 - Windows, macOS, or Linux
 
-### 2. Create a virtual environment
+### 1. Clone the repository
 
-On Windows PowerShell:
+```bash
+git clone https://github.com/daniel-odulate22/pathfinder.git
+cd pathfinder
+```
+
+### 2. Set up Python
+
+Windows PowerShell:
 
 ```powershell
 py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
-```
-
-If Python 3.11 is not installed, use an available supported Python version.
-
-### 3. Install dependencies
-
-```bash
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Run Pathfinder
+If Python 3.11 is unavailable, use a supported Python version installed on your machine.
+
+### 3. Start the backend
+
+From the repository root:
+
+```powershell
+python -m uvicorn server:app --host 127.0.0.1 --port 8000 --reload
+```
+
+The API will be available at `http://127.0.0.1:8000`.
+
+### 4. Start the frontend
+
+Open a second terminal:
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+Open the local Vite URL printed in the terminal, usually `http://localhost:5173`.
+
+Keep both terminals running while using the web app. Camera access is generally permitted on localhost. Allow camera and microphone permissions when prompted.
+
+### 5. Run the Python prototype (optional)
+
+The standalone desktop prototype can be started from the repository root:
 
 ```bash
 python main.py
 ```
 
-Pathfinder opens the webcam and speaks concise descriptions when the detected scene changes. The first run downloads the default `yolo26n.pt` model weights.
-
-Press `q` in the video window to stop.
-
-To run without audio:
+Mute desktop speech:
 
 ```bash
 python main.py --mute
 ```
 
-To select another camera or adjust the minimum interval between spoken updates:
+Choose a camera or adjust the announcement interval:
 
 ```bash
 python main.py --camera 1
 python main.py --announce-interval 8
 ```
 
-## Optional: run the web app with Docker Compose
+Press `q` in the video window to stop the desktop prototype.
+
+## Run with Docker Compose (optional)
 
 ```bash
 docker compose up --build
 ```
 
-Open <http://localhost:8080>, press **Start camera**, and allow camera access. The browser sends frames to the backend, which runs YOLO and decides when a scene should be announced; the browser speaks it. Announcements and answered questions are stored in SQLite in the `pathfinder-data` volume, alongside the downloaded model weights.
+Open `http://localhost:8080`. The Compose setup runs the backend and frontend and stores SQLite data and downloaded model weights in a Docker volume.
 
-Ask a question by typing it, or with **Ask by voice** in Chrome or Safari. Questions are answered only from the current detections. You can filter by "left", "right", or "front", and search for an object by name: "Where is the chair?" answers with its position or "I cannot see a chair right now."
-
-Only the 80 everyday object types the default YOLO model knows can be found, such as people, chairs, tables, couches, bottles, cups, laptops, phones, backpacks, and TVs. Doors, stairs, and exits are **not** among them; asking for one gets "I cannot look for that."
-
-Press **Read text**, or ask something like "What does the sign say?", to read text in the latest camera frame with RapidOCR, a scene-text model that runs offline. It can still miss or misread text, and it only speaks lines containing Latin letters or digits.
-
-The first build downloads PyTorch and is slow. The app is published on `localhost` only because the API has no authentication. Browsers only allow camera access on `localhost` or HTTPS.
-
-### Use a phone camera
-
-Browsers only allow camera access over HTTPS, so a phone cannot use the laptop's `localhost` address. To get a temporary public HTTPS address:
+The optional phone-camera tunnel is public and unauthenticated while active. Only use it for a controlled demonstration, do not expose sensitive camera feeds, and stop it when finished:
 
 ```bash
 docker compose --profile phone up --build
-docker compose logs tunnel   # shows the https://….trycloudflare.com URL
+docker compose logs tunnel
 ```
 
-Open that URL on the phone. Anyone who has the URL can use the app while it runs, and camera frames pass through Cloudflare, so stop it after the demo.
+Open the generated HTTPS address on the phone. Anyone with the address may be able to access the running app, and camera frames pass through the tunnel provider.
 
-### Demo script
+## Tests and build
 
-1. Start the camera and wait for the first spoken scene description.
-2. Press **Ask by voice**, wait for the tone, and ask "Where is the chair?"
-3. Ask "Is there a bottle on my left?" with none there, to show it does not guess.
-4. Point the camera at a printed sign and press **Read text**.
-
-For frontend development, run the API with `uvicorn server:app` and the UI with `npm run dev` inside `frontend/`.
-
-## Run tests
+Run the Python test suite from the repository root:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-## Project structure
+Build the frontend from the `frontend/` directory:
+
+```bash
+npm ci
+npm run build
+```
+
+## Repository layout
 
 ```text
 pathfinder/
-├── main.py
-├── spatial.py
-├── speech.py
-├── ocr.py
-├── server.py
-├── Dockerfile
-├── docker-compose.yml
+├── main.py                    # Standalone webcam prototype
+├── server.py                  # FastAPI application and API routes
+├── spatial.py                 # Image-space position and prominence logic
+├── speech.py                  # Scene descriptions and announcement scheduling
+├── ocr.py                     # On-demand text recognition
 ├── frontend/
+│   └── src/
+│       ├── App.tsx             # Camera-first React interface
+│       ├── hooks/useSpeech.ts  # Browser speech controls
+│       ├── services/           # Backend API client
+│       └── types.ts            # Shared frontend types
+├── tests/                     # Python unit tests
+├── docs/
+│   └── ARCHITECTURE.md         # Current architecture and future device direction
+├── DEVLOG.md                   # Development history and verification notes
 ├── requirements.txt
-├── DEVLOG.md
-└── tests/
-    ├── test_ocr.py
-    ├── test_spatial.py
-    └── test_speech.py
+└── docker-compose.yml
 ```
 
-## Development log
+## Limitations and responsible use
 
-See [DEVLOG.md](DEVLOG.md) for implementation notes, technical decisions, verification status, and next steps.
+- LEFT / CENTRE / RIGHT describe where an object appears in the image, not its physical location in the room.
+- Bounding-box size is not a reliable distance measurement.
+- The HIGH / MEDIUM / LOW attention heuristic is not a danger score.
+- Object detection is limited to the model's supported classes and can miss or misclassify objects.
+- OCR can omit, distort, or misread text, especially at a distance, at an angle, or in poor lighting.
+- Browser speech recognition support varies by browser and may rely on browser-vendor services.
+- The current API uses shared scene state and is designed for a single active camera session.
+- Authentication, multi-user isolation, production deployment hardening, and wearable hardware are not implemented.
+
+**Privacy:** Camera frames are processed by the local backend during local development. Avoid publishing raw camera captures or evaluation images that may contain identifiable people or private surroundings. The repository ignores local diagnostic and private evaluation folders.
+
+## Architecture and development notes
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Development log](DEVLOG.md)
+
+## Project status
+
+Pathfinder is an experimental prototype. The core detection, question-answering, OCR, and camera-first web interface are implemented. The frontend production build and Python unit tests have been run locally. A full manual verification of camera, audible speech, spoken questions, and OCR on the target device should be completed before relying on a particular setup.
 
 ## License
 
