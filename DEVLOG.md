@@ -73,31 +73,17 @@ This file records implemented work and verified results. Planned work is kept se
 - The web backend keeps one global scene state, so it supports one camera at a time.
 - Pathfinder does not provide safe navigation or collision avoidance.
 
-### Verification status
-- **Milestone 1:** Verified locally by the developer.
-- **Milestone 2:** Verified locally by the developer.
-- **Milestone 3:** Implemented; local tests remain pending.
-- **Milestone 4:** Verified locally by the developer.
-- **Milestone 5:** Repeat cadence verified through the web API (see Milestone 10). Desktop audio cadence not listened to.
-- **Milestone 6:** Unit tests pass in the backend container, and the API was checked through nginx with a still test image (detection, announcement, question, SQLite history). Browser camera, speech output, and spoken questions require local verification.
-- **Milestone 7:** Superseded by Milestone 9.
-- **Milestone 9:** Unit tests pass, including a light-on-dark sign read by the real model. Verified on still photos only.
-- **Milestone 10:** Verified in headless Chrome with a simulated camera. Audible speech, spoken questions, phone cameras, and the tunnel are not verified.
-
-### Next steps
-1. Pull changes, run `python -m unittest discover -s tests -v`, and test the repeat cadence.
-2. Run `docker compose up --build` and test the web app with a real camera, speakers, and microphone.
-3. Evaluate browser speech-recognition reliability on the target Windows machine.
-4. Try **Read text** on real signs through the camera, including at an angle and from a distance.
+### Verification status at this milestone
+- Core Python modules and the API have automated tests.
+- OCR tests pass, including a light-on-dark sign read by the real model. Verification is on still photos only.
+- Browser interaction was verified in headless Chrome with a simulated camera. Audible speech, spoken questions, phone cameras, and the tunnel still need manual verification on the target device.
 
 ## 14 November 2026
 
-### Milestone 11: Integrated local development workflow verified
-- The merged React + TypeScript frontend and FastAPI backend were pulled into the developer's local repository.
-- The developer started the backend and frontend in separate terminals and confirmed that both ran successfully.
-- The developer reported that the frontend loaded, the backend operated, and the automated test suite passed.
-- The two-terminal local workflow is the recommended development path for now. Docker remains optional.
-- The visual design has not yet been redesigned. A full interface redesign is planned; the current design is functional but does not yet meet the intended product art direction.
+### Milestone 11: Integrated local development workflow
+- The developer pulled the integrated React + TypeScript frontend and FastAPI backend into the local repository.
+- The two-terminal local workflow was established: Uvicorn from the repository root and Vite from `frontend/`.
+- Docker remains an optional workflow.
 
 ### Milestone 12: Product architecture direction
 - Agreed to treat Pathfinder as one product with a device-independent intelligence layer and multiple possible interfaces.
@@ -112,9 +98,26 @@ This file records implemented work and verified results. Planned work is kept se
 - A curated evaluation dataset is planned. It should include ground-truth object labels, model predictions, capture conditions, and outcomes so model changes can be compared objectively.
 - The existing diagnostic captures have not yet been converted into a reviewed or annotated evaluation dataset.
 
-### Next steps
-1. Keep local diagnostic captures excluded from Git and define a privacy-reviewed evaluation dataset workflow.
-2. Redesign the browser interface around a persistent camera workspace, accessible controls, clear live status, and compact scene information.
-3. Review the frontend/backend boundary so device-specific input and output can evolve independently from scene understanding.
-4. Continue vision evaluation, including missed detections, false classifications, duplicate boxes, blur, and performance on the target machine.
-5. Revisit wearable hardware only after the shared software interfaces and interaction requirements are clearer.
+## 15 November 2026
+
+### Milestone 13: Camera-first interface and repository documentation
+- Merged the camera-first React interface redesign and frontend module separation into `main`.
+- Split frontend API calls, shared response types, and browser speech controls into dedicated modules.
+- Added a responsive workspace with live camera preview, detection overlays, scene observations, typed questions, voice input, read-text control, recent activity, and a visible safety note.
+- Updated the architecture and README to describe the current implementation, local development workflow, privacy considerations, and limitations.
+- Updated the GitHub profile README selected-builds section to feature Pathfinder instead of MentorMatch and NutriTrack.
+
+### Local verification
+- Pulled the merged changes from `origin/main`; local `main` was synchronized with the remote.
+- Installed frontend dependencies with `npm ci`; npm reported zero vulnerabilities at the time of installation.
+- Ran `npm run build` successfully. TypeScript compilation and the Vite production build both passed.
+- Ran `python -m unittest discover -s tests -v`; all 25 tests passed.
+- Started the FastAPI backend successfully with Uvicorn and started the Vite development server.
+- Initial Vite API proxy errors occurred because the backend was not yet running. The backend was then started successfully. A complete manual camera, audible speech, spoken-question, and OCR smoke test was not confirmed in this session.
+
+### Current limitations and follow-up
+- The backend still uses shared scene state and is intended for one active camera session at a time.
+- The current browser speech hook does not yet provide a robust listening-state indicator or explicit cancellation lifecycle for speech recognition.
+- Confirm camera start/stop, detection overlays, audible narration, typed and spoken questions, mute, and OCR manually on the target device.
+- Do not describe Pathfinder as a navigation or collision-avoidance product.
+- Keep raw diagnostic frames and private evaluation material out of the public repository.
